@@ -31,16 +31,16 @@ class User(AbstractBaseUser, PermissionsMixin):
     )
     
     phone_regex = RegexValidator(
-        regex=r'^\+?[1-9]\d{1,14}$',
+        regex=r'^\+[1-9]\d{7,14}$',
         message="Enter a valid phone number in E.164 format (e.g. +447700900123)."
     )
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     
     email         = models.EmailField(unique=True)
-    email_verified = models.BooleanField(default=False)
+    is_email_verified = models.BooleanField(default=False)
 
     full_name     = models.CharField(max_length=150)
-    phone_number  = models.CharField(max_length=16, validators=[phone_regex])
+    phone_number  = models.CharField(max_length=15, validators=[phone_regex])
     profile_photo = models.ImageField(upload_to="profiles/", null=True, blank=True)
     role          = models.CharField(max_length=20, choices=ROLE_CHOICES)
 
@@ -53,7 +53,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     updated_at = models.DateTimeField(auto_now=True)
 
     USERNAME_FIELD  = "email"
-    REQUIRED_FIELDS = ["full_name", "phone_number"]
+    REQUIRED_FIELDS = ["full_name", "phone_number", "role"]
 
     objects = UserManager()
 
@@ -71,7 +71,7 @@ class VenueOwnerProfile(models.Model):
     business_address  = models.TextField()
     gst_number        = models.CharField(max_length=20, blank=True, null=True) 
     id_proof_document = models.FileField(upload_to="id_proofs/", null=True, blank=True)
-    is_verified       = models.BooleanField(default=False) 
+    is_profile_verified = models.BooleanField(default=False) 
 
     class Meta:
         verbose_name = _("Venue Owner Profile")
