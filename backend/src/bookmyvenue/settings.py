@@ -194,9 +194,9 @@ HEADLESS_FRONTEND_URLS = {
     "account_signup": "/account/signup",
     "socialaccount_login_error": "/account/provider/callback",
 }
+
 HEADLESS_SERVE_SPECIFICATION = True
 USERSESSIONS_TRACK_ACTIVITY = True
-
 CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOWED_ORIGINS = [
