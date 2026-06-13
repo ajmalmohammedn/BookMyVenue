@@ -12,7 +12,10 @@ class UserManager(BaseUserManager):
             raise ValueError("Email is required")
         email = self.normalize_email(email)
         user = self.model(email=email, **extra_fields)
-        user.set_password(password)
+        if password:
+            user.set_password(password)
+        else:
+            user.set_unusable_password()
         user.save(using=self._db)
         return user
 
@@ -20,6 +23,12 @@ class UserManager(BaseUserManager):
         extra_fields.setdefault("is_staff", True)
         extra_fields.setdefault("is_superuser", True)
         extra_fields.setdefault("role", "admin")
+
+        if extra_fields.get("is_staff") is not True:
+            raise ValueError("Superuser must have is_staff=True")
+
+        if extra_fields.get("is_superuser") is not True:
+            raise ValueError("Superuser must have is_superuser=True")
         return self.create_user(email, password, **extra_fields)
 
 
@@ -36,13 +45,13 @@ class User(AbstractBaseUser, PermissionsMixin):
     )
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     
-    email         = models.EmailField(unique=True)
+    email         = models.EmailField(unique=True, db_index=True)
     is_email_verified = models.BooleanField(default=False)
 
     full_name     = models.CharField(max_length=150)
     phone_number  = models.CharField(max_length=15, validators=[phone_regex])
     profile_photo = models.ImageField(upload_to="profiles/", null=True, blank=True)
-    role          = models.CharField(max_length=20, choices=ROLE_CHOICES)
+    role          = models.CharField(max_length=20, choices=ROLE_CHOICES, default=ROLE_CHOICES[0][0])
 
     city          = models.CharField(max_length=100)
     state         = models.CharField(max_length=100)
@@ -53,7 +62,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     updated_at = models.DateTimeField(auto_now=True)
 
     USERNAME_FIELD  = "email"
-    REQUIRED_FIELDS = ["full_name", "phone_number", "role"]
+    REQUIRED_FIELDS = ["full_name", "phone_number"]
 
     objects = UserManager()
 
