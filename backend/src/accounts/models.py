@@ -1,10 +1,10 @@
 import uuid
+from datetime import timedelta
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.core.validators import RegexValidator
 from django.utils.translation import gettext_lazy as _
 from django.utils import timezone
 from django.db import models
-from datetime import timedelta
 
 
 class UserManager(BaseUserManager):
@@ -84,6 +84,11 @@ class OTPVerification(models.Model):
         ("password_reset","Password Reset"),
     )
 
+    OTP_EXPIRY_MINUTES = 10
+    MAX_FAILED_ATTEMPTS = 5
+    MAX_RESEND_COUNT = 5
+    RESEND_COOLDOWN_SECONDS = 60
+
     id         = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user       = models.ForeignKey(User, on_delete=models.CASCADE, related_name="otps")
     otp        = models.CharField(max_length=6)
@@ -95,10 +100,17 @@ class OTPVerification(models.Model):
 
     # Track resend attempts
     resend_count    = models.PositiveIntegerField(default=0)
+    failed_attempts = models.PositiveIntegerField(default=0)
     last_resent_at  = models.DateTimeField(null=True, blank=True)
 
     class Meta:
-        ordering            = ["-created_at"]
+        ordering = ["-created_at"]
+        verbose_name        = _("OTP Verification")
+        verbose_name_plural = _("OTP Verifications")
+        indexes = [
+            models.Index(fields=["user", "otp_type", "is_used"]),
+        ]
+
 
     def __str__(self):
         return f"{self.user.email} | {self.otp_type} | {'Used' if self.is_used else 'Pending'}"
@@ -107,7 +119,14 @@ class OTPVerification(models.Model):
         return timezone.now() > self.expires_at
 
     def is_valid(self):
-        return not self.is_used and not self.is_expired()
+        return not self.is_used and not self.is_expired() and self.failed_attempts < self.MAX_FAILED_ATTEMPTS
+    
+    def can_resend(self):
+        if not self.last_resent_at:
+            return True
+        cooldown = timedelta(seconds=self.RESEND_COOLDOWN_SECONDS)
+        return timezone.now() >= self.last_resent_at + cooldown
+
 
 
 class VenueOwnerProfile(models.Model):
@@ -118,7 +137,10 @@ class VenueOwnerProfile(models.Model):
     id_proof_document   = models.FileField(upload_to="id_proofs/", null=True, blank=True)
     is_profile_verified = models.BooleanField(default=False)
 
-
+    class Meta:
+        verbose_name        = _("Venue Owner Profile")
+        verbose_name_plural = _("Venue Owner Profiles")
 
     def __str__(self):
         return self.business_name or f"Owner: {self.user.email}"
+    

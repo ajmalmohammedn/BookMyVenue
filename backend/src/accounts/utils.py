@@ -1,39 +1,47 @@
-import random
+import secrets
 from django.utils import timezone
 from django.core.mail import send_mail
 from django.conf import settings
 from datetime import timedelta
 
 
-OTP_EXPIRY_MINUTES  = 10
-OTP_COOLDOWN_SECONDS = 60
-OTP_MAX_RESEND      = 5
 
-def generate_otp():
-    return str(random.randint(100000, 999999))
+def generate_otp() -> str:
+    return str(secrets.randbelow(900000) + 100000)
 
 
 def create_otp(user, otp_type="signup"):
     from .models import OTPVerification
 
-    # Invalidate all previous unused OTPs of same type
-    OTPVerification.objects.filter(
-        user = user,
-        otp_type = otp_type,
-        is_used = False
-    ).update(is_used = True)
+    # Rate limit: max 5 OTPs per 10 minutes
+    recent_count = OTPVerification.objects.filter(
+        user=user,
+        otp_type=otp_type,
+        created_at__gte=timezone.now() - timedelta(minutes=10),
+    ).count()
+
+    if recent_count >= OTPVerification.MAX_RESEND_COUNT:
+        raise Exception("Too many OTP requests. Please try again later.")
+
+    # # Invalidate all previous unused OTPs of same type
+    # OTPVerification.objects.filter(
+    #     user = user,
+    #     otp_type = otp_type,
+    #     is_used = False
+    # ).update(is_used = True)
 
     otp = OTPVerification.objects.create(
         user = user,
         otp = generate_otp(),
         otp_type = otp_type,
-        expires_at = timezone.now() + timedelta(minutes=OTP_EXPIRY_MINUTES),
+        expires_at = timezone.now() + timedelta(minutes=OTPVerification.OTP_EXPIRY_MINUTES),
     )
 
     return otp
 
 
 def send_otp_email(email, otp, otp_type="signup"):
+    from .models import OTPVerification
 
     subjects = {
         "signup": "Verify your BookMyVenue account",
@@ -51,7 +59,7 @@ def send_otp_email(email, otp, otp_type="signup"):
 
         {otp}
 
-        This OTP is valid for {OTP_EXPIRY_MINUTES} minutes.
+        This OTP is valid for {OTPVerification.OTP_EXPIRY_MINUTES} minutes.
         Do not share this with anyone.
 
         Thanks,
@@ -68,7 +76,7 @@ def send_otp_email(email, otp, otp_type="signup"):
 
         {otp}
 
-        This OTP is valid for {OTP_EXPIRY_MINUTES} minutes.
+        This OTP is valid for {OTPVerification.OTP_EXPIRY_MINUTES} minutes.
         If you did not request this, ignore this email.
 
         Thanks,
