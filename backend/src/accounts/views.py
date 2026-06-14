@@ -4,7 +4,8 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework_simplejwt.tokens import RefreshToken
-from .serializers  import CheckEmailSerializer, VerifyOTPSerializer
+from .serializers  import (CheckEmailSerializer, VerifyOTPSerializer, LoginSerializer,
+                           UserDetailSerializer, SetPasswordSerializer)
 from .models import User
 from .utils import create_otp, send_otp_email, get_latest_otp
 
@@ -41,7 +42,7 @@ class CheckEmailView(APIView):
                     "message": "Email not verified. OTP resent to your email"
                 })
             
-            return self.response({
+            return Response({
                 "status": "login",
                 "message": "Email found. Please enter your password."
             })
@@ -112,5 +113,86 @@ class VerifyOTPView(APIView):
         return Response({
             "status": "verified",
             "message": "Email verified, Please complete your profile.",
+            "password_required": not user.has_usable_password(),
             "tokens": tokens,
+        })
+
+
+class SetPasswordView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = SetPasswordSerializer(data=request.data)
+
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        email = serializer.validated_data['email']
+        password = serializer.validated_data['password']
+
+        try:
+            user = User.objects.get(email=email)
+        except User.DoesNotExist:
+            return Response(
+                {"error": "No account found with this email"}
+            )
+        
+        if user.has_usable_password():
+            return Response(
+                {"error": "Password has already set."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        user.set_password(password)
+        user.save(update_fields=["password"])
+        return Response(
+            {"message": "Password set successfully"},
+            status=status.HTTP_200_OK
+        )
+
+
+class LoginView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = LoginSerializer(data=request.data)
+
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        email = serializer.validated_data['email']
+        password = serializer.validated_data['password']
+
+        try:
+            user = User.objects.get(email=email)
+        except User.DoesNotExist:
+            return Response(
+                {"error": "No account found with this email."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        if not user.is_email_verified:
+            return Response(
+                {"error": "Please verify your email before loggin in."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        if not user.has_usable_password():
+            return Response(
+                {"error": "Password not set. Please complete signup.",
+                "password_required": not user.has_usable_password()}
+            )
+        
+        if not user.check_password(password):
+            return Response(
+                {"error": "Incorrect password"},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        
+        tokens = get_tokens_for_user(user)
+
+        return Response({
+            "status": "success",
+            "token": tokens,
+            "user": UserDetailSerializer(user).data
         })
