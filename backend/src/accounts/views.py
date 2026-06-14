@@ -1,11 +1,11 @@
 from django.shortcuts import render
 from rest_framework.views import APIView
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny,IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework_simplejwt.tokens import RefreshToken
 from .serializers  import (CheckEmailSerializer, VerifyOTPSerializer, LoginSerializer,
-                           UserDetailSerializer, SetPasswordSerializer)
+                           UserDetailSerializer, CompleteProfileSerializer)
 from .models import User
 from .utils import create_otp, send_otp_email, get_latest_otp
 
@@ -113,42 +113,9 @@ class VerifyOTPView(APIView):
         return Response({
             "status": "verified",
             "message": "Email verified, Please complete your profile.",
-            "password_required": not user.has_usable_password(),
             "tokens": tokens,
         })
 
-
-class SetPasswordView(APIView):
-    permission_classes = [AllowAny]
-
-    def post(self, request):
-        serializer = SetPasswordSerializer(data=request.data)
-
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        
-        email = serializer.validated_data['email']
-        password = serializer.validated_data['password']
-
-        try:
-            user = User.objects.get(email=email)
-        except User.DoesNotExist:
-            return Response(
-                {"error": "No account found with this email"}
-            )
-        
-        if user.has_usable_password():
-            return Response(
-                {"error": "Password has already set."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        user.set_password(password)
-        user.save(update_fields=["password"])
-        return Response(
-            {"message": "Password set successfully"},
-            status=status.HTTP_200_OK
-        )
 
 
 class LoginView(APIView):
@@ -177,12 +144,6 @@ class LoginView(APIView):
                 status=status.HTTP_403_FORBIDDEN
             )
         
-        if not user.has_usable_password():
-            return Response(
-                {"error": "Password not set. Please complete signup.",
-                "password_required": not user.has_usable_password()}
-            )
-        
         if not user.check_password(password):
             return Response(
                 {"error": "Incorrect password"},
@@ -196,3 +157,20 @@ class LoginView(APIView):
             "token": tokens,
             "user": UserDetailSerializer(user).data
         })
+
+
+class CompleteProfileView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = CompleteProfileSerializer(
+            request.user, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({
+                "status":  "success",
+                "message": "Profile completed!",
+                "user":    UserDetailSerializer(request.user).data,
+            })
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

@@ -1,5 +1,6 @@
 from rest_framework import serializers
-from .models import User
+from .models import User, VenueOwnerProfile
+from django.contrib.auth.password_validation import validate_password
 
 
 class BaseEmailSerializer(serializers.Serializer):
@@ -11,10 +12,6 @@ class BaseEmailSerializer(serializers.Serializer):
 
 class CheckEmailSerializer(BaseEmailSerializer):
     pass
-
-
-class SetPasswordSerializer(BaseEmailSerializer):
-    password = serializers.CharField(min_length=8, write_only=True)
 
 
 class VerifyOTPSerializer(BaseEmailSerializer):
@@ -49,3 +46,52 @@ class UserDetailSerializer(serializers.ModelSerializer):
             "id", "email", "role", "full_name", "phone_number","city", "state", 
             "profile_photo","is_email_verified", "is_profile_complete","date_joined"
         ]
+
+
+class CompleteProfileSerializer(serializers.ModelSerializer):
+    password         = serializers.CharField(write_only=True, validators=[validate_password])
+    confirm_password = serializers.CharField(write_only=True)
+
+    class Meta:
+        model  = User
+        fields = [
+            "full_name", "phone_number", "city", "state", "role", "profile_photo",
+            "password", "confirm_password" ]
+
+    def validate_full_name(self, value):
+        value = value.strip()
+
+        if len(value) < 3:
+            raise serializers.ValidationError("Full name must be at least 3 characters.")
+        
+        return value
+
+    def validate_phone_number(self, value):
+
+        if not value.startswith("+"):
+            raise serializers.ValidationError("Phone must start with + (e.g. +919876543210).")
+        
+        return value
+
+    def validate(self, attrs):
+
+        if attrs["password"] != attrs["confirm_password"]:
+            raise serializers.ValidationError({"confirm_password": "Passwords do not match."})
+        
+        return attrs
+
+    def update(self, instance, validated_data):
+        
+        validated_data.pop("confirm_password")
+        password = validated_data.pop("password")
+
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+
+        instance.set_password(password)
+        instance.save()
+
+        if instance.role == "venue_owner":
+            VenueOwnerProfile.objects.get_or_create(user=instance)
+
+        return instance
