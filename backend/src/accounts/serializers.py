@@ -85,6 +85,7 @@ class SetPasswordSerializer(serializers.Serializer):
             raise serializers.ValidationError({"confirm_password": "Passwords do not match."})
         return attrs
 
-    def save(self, user):
+    def save(self, **kwargs):
+        user = kwargs["user"]
         user.set_password(self.validated_data["password"])
-        user.save()
+        user.save(update_fields=["password"])
