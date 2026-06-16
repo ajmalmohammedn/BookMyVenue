@@ -29,12 +29,12 @@ class VerifyOTPSerializer(BaseEmailSerializer):
 
 class LoginSerializer(BaseEmailSerializer):
     password = serializers.CharField(write_only=True)
-    confirm_password = serializers.CharField(write_only=True)
+    # confirm_password = serializers.CharField(write_only=True)
 
-    def validate(self, attrs):
-        if attrs["password"] != attrs["confirm_password"]:
-            raise serializers.ValidationError("Password do not match")
-        return attrs
+    # def validate(self, attrs):
+    #     if attrs["password"] != attrs["confirm_password"]:
+    #         raise serializers.ValidationError("Password do not match")
+    #     return attrs
 
 
 class UserDetailSerializer(serializers.ModelSerializer):
@@ -49,49 +49,42 @@ class UserDetailSerializer(serializers.ModelSerializer):
 
 
 class CompleteProfileSerializer(serializers.ModelSerializer):
-    password         = serializers.CharField(write_only=True, validators=[validate_password])
-    confirm_password = serializers.CharField(write_only=True)
 
     class Meta:
         model  = User
-        fields = [
-            "full_name", "phone_number", "city", "state", "role", "profile_photo",
-            "password", "confirm_password" ]
+        fields = ["full_name", "phone_number", "city", "state", "role", "profile_photo"]
 
     def validate_full_name(self, value):
         value = value.strip()
-
         if len(value) < 3:
             raise serializers.ValidationError("Full name must be at least 3 characters.")
-        
         return value
 
     def validate_phone_number(self, value):
-
         if not value.startswith("+"):
             raise serializers.ValidationError("Phone must start with + (e.g. +919876543210).")
-        
         return value
 
-    def validate(self, attrs):
-
-        if attrs["password"] != attrs["confirm_password"]:
-            raise serializers.ValidationError({"confirm_password": "Passwords do not match."})
-        
-        return attrs
-
     def update(self, instance, validated_data):
-        
-        validated_data.pop("confirm_password")
-        password = validated_data.pop("password")
-
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
 
-        instance.set_password(password)
         instance.save()
 
         if instance.role == "venue_owner":
             VenueOwnerProfile.objects.get_or_create(user=instance)
 
         return instance
+    
+class SetPasswordSerializer(serializers.Serializer):
+    password         = serializers.CharField(write_only=True, required=True, validators=[validate_password])
+    confirm_password = serializers.CharField(write_only=True, required=True)
+
+    def validate(self, attrs):
+        if attrs["password"] != attrs["confirm_password"]:
+            raise serializers.ValidationError({"confirm_password": "Passwords do not match."})
+        return attrs
+
+    def save(self, user):
+        user.set_password(self.validated_data["password"])
+        user.save()

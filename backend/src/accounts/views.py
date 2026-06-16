@@ -1,11 +1,10 @@
-from django.shortcuts import render
-from rest_framework.views import APIView
-from rest_framework.permissions import AllowAny,IsAuthenticated
-from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.views import APIView
+from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
-from .serializers  import (CheckEmailSerializer, VerifyOTPSerializer, LoginSerializer,
-                           UserDetailSerializer, CompleteProfileSerializer)
+from rest_framework_simplejwt.exceptions import TokenError
+from rest_framework.permissions import AllowAny, IsAuthenticated
+from .serializers  import (CheckEmailSerializer, VerifyOTPSerializer, LoginSerializer, UserDetailSerializer, CompleteProfileSerializer, SetPasswordSerializer)
 from .models import User
 from .utils import create_otp, send_otp_email, get_latest_otp
 
@@ -15,8 +14,10 @@ def get_tokens_for_user(user):
 
     return {
         "refresh": str(refresh),
-        "access":  str(refresh.access_token),
+        "access": str(refresh.access_token),
+        "expires_at": refresh.access_token["exp"]
     }
+
 
 class CheckEmailView(APIView):
     permission_classes = [AllowAny]
@@ -64,7 +65,6 @@ class VerifyOTPView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        print(request.data)
         serializer = VerifyOTPSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors,
@@ -114,7 +114,7 @@ class VerifyOTPView(APIView):
             "status": "verified",
             "message": "Email verified, Please complete your profile.",
             "tokens": tokens,
-        })
+        }, status=status.HTTP_200_OK)
 
 
 
@@ -164,7 +164,7 @@ class CompleteProfileView(APIView):
 
     def post(self, request):
         serializer = CompleteProfileSerializer(
-            request.user, data=request.data, partial=True)
+            request.user, data=request.data)
         if serializer.is_valid():
             serializer.save()
             return Response({
@@ -173,4 +173,59 @@ class CompleteProfileView(APIView):
                 "user":    UserDetailSerializer(request.user).data,
             })
 
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+
+class RefreshTokenView(APIView):
+    permission_classes = [AllowAny]
+
+    
+    def post(self, request):
+        refresh_token = request.data.get("refresh_token")
+
+        if not refresh_token:
+            return Response(
+                {"error": "Refresh token is required."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            refresh = RefreshToken(refresh_token) 
+
+            user_id = refresh.payload.get("user_id")
+            user    = User.objects.get(id=user_id)
+
+            refresh.blacklist()
+
+            new_refresh = RefreshToken.for_user(user)
+            new_access  = str(new_refresh.access_token)
+
+            return Response({
+                "access":     new_access,
+                "refresh":    str(new_refresh),
+                "expires_at": new_refresh.access_token["exp"],
+            }, status=status.HTTP_200_OK)
+
+        except TokenError as e:
+            return Response(
+                {"error": str(e)},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        except User.DoesNotExist:
+            return Response(
+                {"error": "User not found."},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        
+class SetPasswordView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = SetPasswordSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save(user=request.user)
+            return Response({
+                "status":  "success",
+                "message": "Password set successfully.",
+            }, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
