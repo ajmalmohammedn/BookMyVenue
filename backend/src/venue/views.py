@@ -117,7 +117,7 @@ class VenueDetailUpdateDeleteView(APIView):
 
     def delete(self, request, pk):
         venue = self.get_object(pk, user=request.user)
-        venue.soft_delete()  # ✅ soft delete — not removed from DB
+        venue.soft_delete()
         return Response(
             {"message": "Venue deleted successfully."},
             status=status.HTTP_200_OK

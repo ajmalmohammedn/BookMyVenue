@@ -23,4 +23,5 @@ urlpatterns = [
     path("accounts/", include("allauth.urls")),
     path("_allauth/", include("allauth.headless.urls")),
     path("api/venue/",include("venue.urls")),
+    path("api/admin/",include("administration.urls")),
 ]
