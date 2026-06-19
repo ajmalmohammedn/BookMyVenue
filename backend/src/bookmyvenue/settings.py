@@ -46,6 +46,7 @@ INSTALLED_APPS = [
     # Local apps
     'accounts.apps.AccountsConfig',
     'venue',
+    'administration',
 
     # Third-party apps
     'rest_framework',

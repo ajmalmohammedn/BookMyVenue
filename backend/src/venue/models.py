@@ -3,7 +3,7 @@ from django.db import models
 from django.utils.translation import gettext_lazy as _
 from django.core.validators import MinValueValidator
 from django.utils import timezone
-from src.accounts.models import User
+from accounts.models import User
 
 
 class SoftDeleteManager(models.Manager):
