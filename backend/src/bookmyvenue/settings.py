@@ -47,6 +47,7 @@ INSTALLED_APPS = [
     'accounts.apps.AccountsConfig',
     'venue',
     'administration',
+    'bookings',
 
     # Third-party apps
     'rest_framework',
