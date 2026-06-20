@@ -101,8 +101,7 @@ class VenueCreateUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model  = Venue
         fields = [
-            "name", "description", "status",
-            "category",
+            "name", "description", "status", "category",
             "address", "city", "state", "pincode",
             "latitude", "longitude",
             "price_per_hour", "price_per_day",

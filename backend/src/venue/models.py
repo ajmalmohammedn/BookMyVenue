@@ -48,20 +48,20 @@ class VenueCategory(models.Model):
     icon = models.CharField(max_length=50, null=True, blank=True)  
 
     class Meta:
-        ordering            = ["name"]
+        ordering = ["name"]
 
     def __str__(self):
         return self.name
 
 
-#fecilities
+#Facilities
 class Amenity(models.Model):
     id   = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=100, unique=True)
     icon = models.CharField(max_length=50, null=True, blank=True)
 
     class Meta:
-        ordering            = ["name"]
+        ordering = ["name"]
 
     def __str__(self):
         return self.name
@@ -112,10 +112,11 @@ class Venue(SoftDeleteModel):
     updated_at  = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering            = ["-created_at"]
+        ordering = ["-created_at"]
 
     def __str__(self):
         return f"{self.name} — {self.owner.email}"
+
 
 
 class VenueImage(SoftDeleteModel):
@@ -127,7 +128,7 @@ class VenueImage(SoftDeleteModel):
     uploaded_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        ordering            = ["order", "-uploaded_at"]
+        ordering = ["order", "-uploaded_at"]
 
     def __str__(self):
         return f"Image for {self.venue.name}"
