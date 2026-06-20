@@ -185,3 +185,118 @@ class VenueCreateUpdateSerializer(serializers.ModelSerializer):
             self._save_availability(instance, availability_data)
 
         return instance
+    
+
+class VenueCategorySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = VenueCategory
+        fields = ["id", "name", "slug"]
+        read_only_fields = ["id", "slug"]
+
+
+class AmenitySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Amenity
+        fields = ["id", "name", "icon"]
+        read_only_fields = ["id"]
+
+
+class VenueSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Venue
+        fields = "__all__" 
+
+        read_only_fields = [
+            "id",
+            "owner",
+            "slug",
+            "created_at",
+            "updated_at",
+        ]
+
+    def validate(self, attrs):
+        min_capacity = attrs.get(
+            "min_capacity",
+            getattr(self.instance, "min_capacity", None),
+        )
+        max_capacity = attrs.get(
+            "max_capacity",
+            getattr(self.instance, "max_capacity", None),
+        )
+
+        if (
+            min_capacity is not None
+            and max_capacity is not None
+            and min_capacity > max_capacity
+        ):
+            raise serializers.ValidationError(
+                {
+                    "max_capacity": (
+                        "Maximum capacity must be greater than or equal to "
+                        "minimum capacity."
+                    )
+                }
+            )
+
+        return attrs
+
+
+class VenueAvailabilitySerializer(serializers.ModelSerializer):
+    day_of_week_display = serializers.CharField(
+        source="get_day_of_week_display", read_only=True
+    )
+
+    class Meta:
+        model = VenueAvailability
+        fields = [
+            "id",
+            "venue",
+            "day_of_week",
+            "day_of_week_display",
+            "open_time",
+            "close_time",
+            "is_closed",
+        ]
+        read_only_fields = ["id", "venue"]
+
+    def validate(self, attrs):
+        is_closed = attrs.get(
+            "is_closed", getattr(self.instance, "is_closed", False)
+        )
+        open_time = attrs.get(
+            "open_time", getattr(self.instance, "open_time", None)
+        )
+        close_time = attrs.get(
+            "close_time", getattr(self.instance, "close_time", None)
+        )
+
+        if is_closed:
+            if open_time or close_time:
+                raise serializers.ValidationError(
+                    "A closed day should not have open_time or close_time set."
+                )
+        else:
+            if open_time is None or close_time is None:
+                raise serializers.ValidationError(
+                    "open_time and close_time are required unless the day is marked closed."
+                )
+            if open_time >= close_time:
+                raise serializers.ValidationError(
+                    "close_time must be after open_time."
+                )
+
+        return attrs
+    
+    
+class VenueImageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = VenueImage
+        fields = [
+            "id",
+            "venue",
+            "image",
+            "is_primary",
+            "order",
+            "uploaded_at",
+        ]
+        read_only_fields = ["id", "venue", "uploaded_at"]

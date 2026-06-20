@@ -1,78 +1,27 @@
+from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from rest_framework import status
-from rest_framework.views import APIView
+from rest_framework import viewsets
+from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.views import APIView, PermissionDenied
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
-
-from .models import Venue, VenueImage
-from .permissions import IsVenueOwner
+from .models import Amenity, Venue, VenueAvailability, VenueCategory, VenueImage
+from .permissions import IsVenueOwner, IsVenueOwnerObject
 from .serializers import (
+    AmenitySerializer,
+    VenueAvailabilitySerializer,
+    VenueCategorySerializer,
     VenueListSerializer,
     VenueDetailSerializer,
     VenueCreateUpdateSerializer,
     VenueImageSerializer,
+    VenueSerializer,
 )
-
 
 def get_owner_venue(pk, user):
     return get_object_or_404(Venue, pk=pk, owner=user, is_deleted=False)
-
-
-class VenueListCreateView(APIView):
-    parser_classes = [MultiPartParser, FormParser, JSONParser]
-
-    def get_permissions(self):
-        if self.request.method == "POST":
-            return [IsAuthenticated(), IsVenueOwner()]
-        return [AllowAny()]
-
-    def get(self, request):
-        venues = Venue.objects.filter(status="active").select_related(
-            "owner", "category"
-        ).prefetch_related("images")
-
-        # Filters
-        city     = request.query_params.get("city")
-        state    = request.query_params.get("state")
-        category = request.query_params.get("category")
-        min_price = request.query_params.get("min_price")
-        max_price = request.query_params.get("max_price")
-        capacity  = request.query_params.get("capacity")
-
-        if city:
-            venues = venues.filter(city__icontains=city)
-        if state:
-            venues = venues.filter(state__icontains=state)
-        if category:
-            venues = venues.filter(category__slug=category)
-        if min_price:
-            venues = venues.filter(price_per_hour__gte=min_price)
-        if max_price:
-            venues = venues.filter(price_per_hour__lte=max_price)
-        if capacity:
-            venues = venues.filter(
-                min_capacity__lte=capacity,
-                max_capacity__gte=capacity
-            )
-
-        serializer = VenueListSerializer(venues, many=True, context={"request": request})
-        return Response({
-            "count":  venues.count(),
-            "venues": serializer.data
-        })
-
-    def post(self, request):
-        serializer = VenueCreateUpdateSerializer(
-            data=request.data, context={"request": request}
-        )
-        if serializer.is_valid():
-            venue = serializer.save()
-            return Response(
-                VenueDetailSerializer(venue, context={"request": request}).data,
-                status=status.HTTP_201_CREATED
-            )
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 
@@ -210,3 +159,117 @@ class VenueRestoreView(APIView):
             {"message": "Venue restored successfully."},
             status=status.HTTP_200_OK
         )
+    
+class VenueCategoryViewSet(viewsets.ModelViewSet):
+    queryset = VenueCategory.objects.all()
+    serializer_class = VenueCategorySerializer
+    permission_classes = [IsAuthenticated, IsVenueOwner]
+    lookup_field = "slug"
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        name = self.request.query_params.get("name")
+        if name:
+            queryset = queryset.filter(name__icontains=name)
+        return queryset
+    
+
+class AmenityViewSet(viewsets.ModelViewSet):
+    queryset = Amenity.objects.all()
+    serializer_class = AmenitySerializer
+    permission_classes = [IsAuthenticated, IsVenueOwner, IsVenueOwnerObject]
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        name = self.request.query_params.get("name")
+        if name:
+            queryset = queryset.filter(name__icontains=name)
+        return queryset
+    
+
+class VenueViewSet(viewsets.ModelViewSet):
+    queryset = Venue.objects.all()  # fallback only; get_queryset() does the real work
+    serializer_class = VenueSerializer
+    permission_classes = [IsVenueOwner, IsVenueOwnerObject]
+    lookup_field = "slug"
+
+    def get_queryset(self):
+        user = self.request.user
+        queryset = Venue.objects.select_related("category", "owner").prefetch_related("amenities")
+
+        if user.is_authenticated and user.is_staff:
+            return queryset
+
+        if user.is_authenticated:
+            return queryset.filter(Q(status="active") | Q(owner=user))
+
+        return queryset.filter(status="active")
+
+    def perform_create(self, serializer):
+        serializer.save(owner=self.request.user)
+
+
+class VenueAvailabilityViewSet(viewsets.ModelViewSet):
+    serializer_class = VenueAvailabilitySerializer
+    permission_classes = [IsVenueOwner, IsVenueOwnerObject]
+
+    def get_venue(self):
+        return get_object_or_404(Venue, slug=self.kwargs["venue_slug"])
+
+    def get_queryset(self):
+        venue = self.get_venue()
+        user = self.request.user
+
+        if user.is_authenticated and user.is_staff:
+            return VenueAvailability.objects.filter(venue=venue)
+
+        if user.is_authenticated and venue.owner_id == user.id:
+            return VenueAvailability.objects.filter(venue=venue)
+
+        if venue.status == "active":
+            return VenueAvailability.objects.filter(venue=venue)
+
+        # venue is draft/inactive and requester is neither staff nor the owner
+        return VenueAvailability.objects.none()
+
+    def perform_create(self, serializer):
+        venue = self.get_venue()
+        if not (self.request.user.is_staff or venue.owner_id == self.request.user.id):
+            raise PermissionDenied("You do not own this venue.")
+        serializer.save(venue=venue)
+
+
+class VenueImageViewSet(viewsets.ModelViewSet):
+    serializer_class = VenueImageSerializer
+    permission_classes = [IsVenueOwner, IsVenueOwnerObject]
+
+    def get_venue(self):
+        return get_object_or_404(Venue, slug=self.kwargs["venue_slug"])
+
+    def get_queryset(self):
+        venue = self.get_venue()
+        user = self.request.user
+
+        if user.is_authenticated and user.is_staff:
+            return VenueImage.objects.filter(venue=venue)
+
+        if user.is_authenticated and venue.owner_id == user.id:
+            return VenueImage.objects.filter(venue=venue)
+
+        if venue.status == "active":
+            return VenueImage.objects.filter(venue=venue)
+
+        return VenueImage.objects.none()
+    
+    @action(detail=True, methods=["post"])
+    def set_primary(self, request, venue_slug=None, pk=None):
+        image = self.get_object()
+        image.is_primary = True
+        image.save()
+        return Response(VenueImageSerializer(image).data)
+
+    def perform_create(self, serializer):
+        venue = self.get_venue()
+        if not (self.request.user.is_staff or venue.owner_id == self.request.user.id):
+            raise PermissionDenied("You do not own this venue.")
+        serializer.save(venue=venue)
