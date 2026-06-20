@@ -10,6 +10,7 @@ django-cors-headers==4.9.0
 django-environ==0.13.0
 djangorestframework==3.17.1
 djangorestframework_simplejwt==5.5.1
+drf-nested-routers==0.95.0
 environ==1.0
 idna==3.18
 oauthlib==3.3.1

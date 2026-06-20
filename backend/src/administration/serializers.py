@@ -111,6 +111,9 @@ class AdminVenueActionSerializer(serializers.Serializer):
 
 
 class AdminVenueCategorySerializer(serializers.ModelSerializer):
+    slug = serializers.SlugField(read_only=True)
+
     class Meta:
         model  = VenueCategory
         fields = ["id", "name", "slug", "icon"]
+        read_only_fields = ["id", "slug"]
