@@ -1,20 +1,22 @@
-from django.db.models import Count, Sum, Q
-from django.utils import timezone
-from django.shortcuts import get_object_or_404
 from datetime import timedelta
+from django.utils import timezone
+from django.db.models import Count, Q
+from django.shortcuts import get_object_or_404
 
+from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework import status
+from rest_framework.viewsets import ModelViewSet
 from rest_framework.permissions import IsAuthenticated
 
 from accounts.models import User
-from venue.models import Venue, VenueImage
+from venue.models import Venue, VenueCategory
 from .permissions import IsAdminUser
 from .serializers import (
     AdminUserListSerializer,
     AdminUserDetailSerializer,
     AdminUserStatusSerializer,
+    AdminVenueCategorySerializer,
     AdminVenueListSerializer,
     AdminVenueDetailSerializer,
     AdminVenueActionSerializer,
@@ -348,3 +350,18 @@ class AdminUserOverviewView(APIView):
             "by_city":         list(by_city),
             "recent_users":    AdminUserListSerializer(recent_users, many=True).data,
         })
+    
+class AdminVenueCategoryViewSet(ModelViewSet):
+    queryset = VenueCategory.objects.all()
+    serializer_class = AdminVenueCategorySerializer
+    permission_classes = [IsAuthenticated, IsAdminUser]
+    lookup_field = "slug"
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        search = self.request.query_params.get("q")
+        if search:
+            queryset = queryset.filter(name__icontains=search)
+        return queryset
+    
+    

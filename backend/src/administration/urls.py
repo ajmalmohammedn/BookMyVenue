@@ -1,4 +1,6 @@
-from django.urls import path
+from django.urls import include, path
+from rest_framework.routers import DefaultRouter
+
 from .views import (
     AdminDashboardView,
     AdminUserListView,
@@ -9,7 +11,11 @@ from .views import (
     AdminVenueActionView,
     AdminVenueOverviewView,
     AdminUserOverviewView,
+    AdminVenueCategoryViewSet,
 )
+
+router = DefaultRouter()
+router.register("venue-categories", AdminVenueCategoryViewSet,basename="admin-venue-category")
 
 urlpatterns = [
     path("dashboard/", AdminDashboardView.as_view(), name="admin-dashboard"),
@@ -24,4 +30,6 @@ urlpatterns = [
 
     path("overview/venues/", AdminVenueOverviewView.as_view(), name="admin-venue-overview"),
     path("overview/users/", AdminUserOverviewView.as_view(), name="admin-user-overview"),
+
+    path("", include(router.urls)),
 ]

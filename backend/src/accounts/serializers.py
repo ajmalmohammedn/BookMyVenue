@@ -29,12 +29,6 @@ class VerifyOTPSerializer(BaseEmailSerializer):
 
 class LoginSerializer(BaseEmailSerializer):
     password = serializers.CharField(write_only=True)
-    # confirm_password = serializers.CharField(write_only=True)
-
-    # def validate(self, attrs):
-    #     if attrs["password"] != attrs["confirm_password"]:
-    #         raise serializers.ValidationError("Password do not match")
-    #     return attrs
 
 
 class UserDetailSerializer(serializers.ModelSerializer):
@@ -85,6 +79,7 @@ class SetPasswordSerializer(serializers.Serializer):
             raise serializers.ValidationError({"confirm_password": "Passwords do not match."})
         return attrs
 
-    def save(self, user):
+    def save(self, **kwargs):
+        user = kwargs["user"]
         user.set_password(self.validated_data["password"])
-        user.save()
+        user.save(update_fields=["password"])

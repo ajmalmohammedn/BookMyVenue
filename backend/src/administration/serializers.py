@@ -1,6 +1,6 @@
 from rest_framework import serializers
-from src.accounts.models import User
-from venue.models import Venue,VenueImage
+from accounts.models import User
+from venue.models import Venue, VenueCategory, VenueImage
 
 
 
@@ -108,3 +108,9 @@ class AdminVenueActionSerializer(serializers.Serializer):
         "approve", "reject", "restore", "deactivate"
     ])
     reason = serializers.CharField(required=False, allow_blank=True)
+
+
+class AdminVenueCategorySerializer(serializers.ModelSerializer):
+    class Meta:
+        model  = VenueCategory
+        fields = ["id", "name", "slug", "icon"]
