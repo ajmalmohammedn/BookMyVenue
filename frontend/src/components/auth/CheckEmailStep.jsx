@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { checkEmail } from "../../api/auth";
 import AuthLayout from "./AuthLayout";
-import { Button, Input,Card} from '../ui'
+import { Button, Input, Card } from "../ui";
 
 export default function CheckEmailStep({ onNext }) {
   const [email, setEmail]     = useState("");
@@ -12,11 +12,27 @@ export default function CheckEmailStep({ onNext }) {
     if (!email.trim()) return setError("Please enter your email.");
     setError("");
     setLoading(true);
+
     try {
       const { data } = await checkEmail(email.toLowerCase().trim());
-      onNext({ email: email.toLowerCase().trim(), flow: data.status });
+
+      if (data.status) {
+        onNext({ email: email.toLowerCase().trim(), flow: data.status });
+      } else {
+        setError("Unexpected response. Please try again.");
+      }
+
     } catch (err) {
-      setError(err.response?.data?.email?.[0] || "Something went wrong.");
+      if (err.response?.status === 429) {
+        setError("Too many requests. Please wait a moment.");
+      } else {
+        setError(
+          err.response?.data?.error      ||
+          err.response?.data?.email?.[0] ||
+          err.response?.data?.detail     ||
+          "Something went wrong. Please try again."
+        );
+      }
     } finally {
       setLoading(false);
     }
@@ -53,7 +69,8 @@ export default function CheckEmailStep({ onNext }) {
 
         <p className="text-center text-xs text-slate-400">
           By continuing, you agree to our{" "}
-          <span className="text-slate-600 underline cursor-pointer">Terms</span> and{" "}
+          <span className="text-slate-600 underline cursor-pointer">Terms</span>{" "}
+          and{" "}
           <span className="text-slate-600 underline cursor-pointer">Privacy Policy</span>.
         </p>
       </div>
