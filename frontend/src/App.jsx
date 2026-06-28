@@ -1,17 +1,22 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
+import { useState } from "react";
+import { AuthProvider } from "./context/AuthContext";
+import AuthPage  from "./pages/AuthPage";
+import HomePage  from "./pages/HomePage";
 
-
-function App() {
-  const [count, setCount] = useState(0)
-
+export default function App() {
   return (
-    <>
-    <h1 className='text-red-400'>Book My Venue</h1>
-    </>
-  )
+    <AuthProvider>
+      <AppRouter />
+    </AuthProvider>
+  );
 }
 
-export default App
+function AppRouter() {
+  const [page, setPage] = useState("home");
+
+  if (page === "auth") {
+    return <AuthPage onDone={() => setPage("home")} />;
+  }
+
+  return <HomePage onGetStarted={() => setPage("auth")} />;
+}
